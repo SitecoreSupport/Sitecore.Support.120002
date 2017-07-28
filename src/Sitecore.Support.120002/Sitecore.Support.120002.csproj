@@ -56,7 +56,9 @@
     <Compile Include="Shell\Framework\Pipelines\CloneItems\RemoveExtraVersions.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="App_Config\Include\zzz\Sitecore.Support.120002.config" />
+    <Content Include="App_Config\Include\zzz\Sitecore.Support.120002.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Content Include="packages.config" />
