@@ -1,5 +1,4 @@
-﻿using Sitecore;
-using Sitecore.Collections;
+﻿using Sitecore.Collections;
 using Sitecore.Common;
 using Sitecore.Data;
 using Sitecore.Data.Fields;
@@ -8,8 +7,8 @@ using Sitecore.Data.LanguageFallback;
 using Sitecore.Data.Managers;
 using Sitecore.Globalization;
 using Sitecore.Pipelines.ItemProvider.GetItem;
-using System;
 using System.Collections.Generic;
+using Sitecore.StringExtensions;
 
 namespace Sitecore.Support.Pipelines.ItemProvider.GetItem
 {
@@ -32,10 +31,10 @@ namespace Sitecore.Support.Pipelines.ItemProvider.GetItem
             {
                 return;
             }
-            System.Collections.Generic.List<Language> list = new System.Collections.Generic.List<Language>(4);
-            Item item2 = item;
+            List<Language> list = new List<Language>(4);
+            Item fallbackItem = item;
             Language language = args.Language;
-            while (item2 != null && (!item2.Name.StartsWith("__") || StandardValuesManager.IsStandardValuesHolder(item2)) && item2.RuntimeSettings.TemporaryVersion)
+            while (fallbackItem != null && (!fallbackItem.Name.StartsWith("__") || StandardValuesManager.IsStandardValuesHolder(fallbackItem)) && fallbackItem.RuntimeSettings.TemporaryVersion)
             {
                 list.Add(language);
                 language = LanguageFallbackManager.GetFallbackLanguage(language, args.Database);
@@ -43,50 +42,47 @@ namespace Sitecore.Support.Pipelines.ItemProvider.GetItem
                 {
                     return;
                 }
-                item2 = args.FallbackProvider.GetItem(item2.ID, language, Sitecore.Data.Version.Latest, args.Database, args.SecurityCheck);
+                fallbackItem = args.FallbackProvider.GetItem(fallbackItem.ID, language, Sitecore.Data.Version.Latest, args.Database, args.SecurityCheck);
             }
-            if (item2 == null || language == args.Language)
+            if (fallbackItem == null || language == args.Language)
             {
                 return;
             }
-            ItemData data = new ItemData(item2.InnerData.Definition, item.Language, item.Version, item2.InnerData.Fields);
-            Item result = new Item(item.ID, data, item.Database)
+            FieldList fieldList = fallbackItem.InnerData.Fields; //from fallback item version
+            
+
+            bool isItemClone;
+
+            using (new LanguageFallbackItemSwitcher(false))
             {
-                OriginalLanguage = item2.Language
-            };
+                isItemClone = item.IsItemClone;
+            }
 
-            if (item.IsItemClone)
+            if (isItemClone)
             {
 
-                FieldCollection fcoll = item2.Source.Fields;
-                FieldList flist2 = new FieldList();
+                FieldCollection fields = fallbackItem.Source.Fields; //from fallback item version source
+                fieldList = new FieldList();
 
-                foreach (Field field in fcoll)
+                foreach (Field field in fields)
                 {
-                    if (item2.Fields[field.Name] != null && !(field.Name.StartsWith("__")))
+                    if (!(field.Name.IsNullOrEmpty() || field.Name.StartsWith("__")) && fallbackItem.Fields[field.Name] != null)
                     {
-                        flist2.Add(item2.Fields[field.Name].ID, item2.Fields[field.Name].Value);
-
+                        fieldList.Add(fallbackItem.Fields[field.Name].ID, fallbackItem.Fields[field.Name].Value);
                     }
                     else
                     {
-                        flist2.Add(field.ID, field.Value);
+                        fieldList.Add(field.ID, field.Value);
                     }
                 }
-
-                ItemData data1 = new ItemData(item2.InnerData.Definition, item.Language, item.Version, flist2);
-
-
-                result = new Item(item.ID, data1, item.Database)
-                {
-                    OriginalLanguage = item2.Language
-                };
-
-
             }
 
+            ItemData data = new ItemData(fallbackItem.InnerData.Definition, item.Language, item.Version, fieldList);
+            Item result = new Item(item.ID, data, item.Database)
+            {
+                OriginalLanguage = fallbackItem.Language
+            };
             args.Result = result;
-
         }
 
         private bool IsItemFallbackEnabled(Item item)
